@@ -18,7 +18,8 @@ import time
 # Подключаем библиотеку tmdb3
 # from tmdb3 import set_key, set_locale, searchMovie
 import tmdb3 as tmdb
-#import tmdbsimple as tmdb
+# Подключаем библиотеку kinopoisk_api
+from kinopoisk_api import KP
 
 # Библиотека Kinopoisk.ru (https://github.com/ramusus/kinopoiskpy)
 #from kinopoisk.movie import Movie
@@ -36,11 +37,14 @@ PROBE_COMMAND = (
 )
 
 directory = '/Users/fofanov.dmitry/Projects/'
-m3u_file = 'ott.m3u8'
+m3u_file = 'megogo.m3u'
 #m3u_file = '195_Kinokolekcia.m3u'
 
 provider_prifix = 'hdru'
 path_name = 'StrmEmby'
+
+tmdb_key = '1e5af542a2069e37d4ce990ad61946e0'
+kinopoisk_key = '6858ec1f-37af-4774-aafd-51775f042087'
 
 #timeout_value = 120
 
@@ -213,7 +217,7 @@ def m3uToFileEmby():
         year = title_array[len(title_array)-1][0:-1]
 
         # Подключаем API ключ для tmdb3
-        tmdb.set_key('1e5af542a2069e37d4ce990ad61946e0')
+        tmdb.set_key(tmdb_key)
         tmdb.set_locale('ru', 'RU')
         title_year = title + ' (' + year + ')'
         res = tmdb.searchMovieWithYear(title_year)
@@ -226,14 +230,24 @@ def m3uToFileEmby():
                         for count in res[0].countries:
                             print( count.code )
                         #print( res[0].countries[0].code )
-                        print( res[0].originaltitle )
+                        #print( res[0].originaltitle )
                         print( res[0].imdb )                
                         print( res[0].poster.geturl() )
-                        print( res[0].backdrop.geturl() )                
+                        print( res[0].backdrop.geturl() )              
             except:
                 pass
         else:
-            print(track.title)
+            kinopoisk = KP(token=kinopoisk_key)
+            res = kinopoisk.search(track.title)
+            if len(res) > 0:
+                print( res[0].ru_name )
+                print( res[0].year )
+                print( res[0].genres )
+                print( res[0].countries )
+                print( res[0].poster )
+            else:
+                print(track.title)
+
 
         #print(track.title, track.path, track.logo)
 
