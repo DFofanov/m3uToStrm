@@ -14,15 +14,13 @@ import urllib.parse
 import urllib.request
 
 import time
+import datetime
 
 # Подключаем библиотеку tmdb3
 # from tmdb3 import set_key, set_locale, searchMovie
 import tmdb3 as tmdb
 # Подключаем библиотеку kinopoisk_api
 from kinopoisk_api import KP
-
-# Библиотека Kinopoisk.ru (https://github.com/ramusus/kinopoiskpy)
-#from kinopoisk.movie import Movie
 
 # Бибилиотеки для вызова утилиты ffprobe
 from subprocess import PIPE
@@ -37,7 +35,7 @@ PROBE_COMMAND = (
 )
 
 directory = '/Users/fofanov.dmitry/Projects/'
-m3u_file = 'megogo.m3u'
+m3u_file = 'ott.m3u8'
 #m3u_file = '195_Kinokolekcia.m3u'
 
 provider_prifix = 'hdru'
@@ -46,7 +44,7 @@ path_name = 'StrmEmby'
 tmdb_key = '1e5af542a2069e37d4ce990ad61946e0'
 kinopoisk_key = '6858ec1f-37af-4774-aafd-51775f042087'
 
-#timeout_value = 120
+timeout_value = 120
 
 class track():
     def __init__(self, title, path, logo):
@@ -54,7 +52,7 @@ class track():
         self.path = path
         self.logo = logo
 
-def parsem3u(infile):
+def ParseM3U(infile):
     try:
         assert(type(infile) == '_io.TextIOWrapper')
     except AssertionError:
@@ -89,19 +87,19 @@ def parsem3u(infile):
 
     return playlist
 
-def create_dir(dir):
+def CreateDir(dir):
     if not os.path.exists(dir):
         os.makedirs(dir)
 
-def save_file(dir, filename, text):
-    create_dir(dir)
+def SaveStrm(folder, filename, text):
+    CreateDir(folder)
     try:
-        f = open(dir + filename,"w+")
+        f = open(folder + filename,"w+")
         f.write(text)
     finally:
         f.close()
 
-def probe(url, timeout=None):
+def Probe(url, timeout=None):
     """Invoke probe to get stream information."""
     outs = None
     proc = Popen(f'{PROBE_COMMAND} {url}'.split(), stdout=PIPE, stderr=PIPE)
@@ -116,7 +114,27 @@ def probe(url, timeout=None):
             print(exc)
     return None
 
-def get_category(width):
+# Узнаем качество видео с помощью утилиты ffprobe
+def GetQuality(url,timeout_value):
+    quality = None
+    obj_probe = Probe(url,timeout_value)
+    if obj_probe != None and len(obj_probe) > 0:
+        if len(obj_probe["streams"]) > 0:
+            width = obj_probe["streams"][0]["width"]
+            quality = GetCategory(width)
+    return quality
+
+# Сохраняем постер в папке
+def SavePoster(folder,filename,url):
+    ext = os.path.splitext(url)[1]
+    try:
+        response = requests.get(url, verify=False)
+        with open(folder + "/" + filename + ext, "wb") as file:
+            file.write(response.content)
+    except:
+        pass
+
+def GetCategory(width):
     category = None
     if (width <= 256): category = '144p'
     elif (width in range(426, 640)): category = '240p'
@@ -189,13 +207,7 @@ class rutor(object):
         for info in atr.text.split('\n'):
             if info == 'название':
                 print(info)
-
         
-#        print(atr[4].previous)
-#        print(atr[6].previous)
-#        print(atr[12].previous)
-#        print(atr[13].next)
-
     def search(self, what, cat='all'):
         start = 0
         f = True
@@ -207,14 +219,36 @@ class rutor(object):
                 f = True
             start += 1
 
+def SaveNFO(filename,nfo_info):
+    try:
+        f = open(filename,"w+")
+        f.write('<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n')
+        f.write('<movie>\n')
+        f.write('  <plot><![CDATA[' + nfo_info[0].split('=')[1] + ']]></plot>\n')
+        f.write('  <outline />\n')
+        f.write('  <lockdata>false</lockdata>\n')
+        f.write('  <dateadded>' + datetime.datetime.now().strftime('%Y-%m-%d %H:%M') + '</dateadded>\n')
+        f.write('  <title>' + nfo_info[1].split('=')[1] + '</title>\n')
+        f.write('  <originaltitle>' + nfo_info[2].split('=')[1] + '</originaltitle>\n')
+        f.write('  <rating>' + nfo_info[3].split('=')[1] + '</rating>\n')
+        f.write('  <year>' + nfo_info[4].split('=')[1] + '</year>\n')
+        f.write('  <imdbid>' + nfo_info[5].split('=')[1] + '</imdbid>\n')
+        f.write('  <tmdbid>' + nfo_info[6].split('=')[1] + '</tmdbid>\n')
+        f.write('  <releasedate>' + nfo_info[7].split('=')[1] + '</releasedate>\n')
+        f.write('</movie>\n')
+    finally:
+        f.close()    
+
 def m3uToFileEmby():
     #m3ufile = sys.argv[1]
     m3ufile = directory + m3u_file
-    playlist = parsem3u(m3ufile)
+    playlist = ParseM3U(m3ufile)
     for track in playlist:
         title_array = track.title.split(' (')
         title = title_array[0]
         year = title_array[len(title_array)-1][0:-1]
+
+        nfo_info = []
 
         # Подключаем API ключ для tmdb3
         tmdb.set_key(tmdb_key)
@@ -223,17 +257,23 @@ def m3uToFileEmby():
         res = tmdb.searchMovieWithYear(title_year)
         if len(res) > 0:
             try:
+                nfo_info.append('plot='+res[0].overview)
+                nfo_info.append('title='+res[0].title)
+                nfo_info.append('originaltitle='+res[0].originaltitle)
+                nfo_info.append('rating='+str(res[0].popularity))
+                nfo_info.append('year='+year)
+                nfo_info.append('imdbid='+res[0].imdb)
+                nfo_info.append('tmdbid='+str(res[0].id))
+                nfo_info.append('releasedate='+str(res[0].releasedate))
+                nfo_info.append('poster='+res[0].poster.geturl())
+                nfo_info.append('fanart='+res[0].backdrop.geturl())
+                nfo_info.append('genre='+res[0].genres[0].name)
+                Countries = ''
                 for count in res[0].countries:
-                    if ('RU' in count.code) and (int(year) < 1991):
-                        if res[0].title != None:
-                            print( res[0].title )
-                        for count in res[0].countries:
-                            print( count.code )
-                        #print( res[0].countries[0].code )
-                        #print( res[0].originaltitle )
-                        print( res[0].imdb )                
-                        print( res[0].poster.geturl() )
-                        print( res[0].backdrop.geturl() )              
+                    if len(Countries) == 0:
+                        Countries = count.code
+                    else: Countries = Countries + ',' + count.code
+                nfo_info.append('countries:'+Countries)
             except:
                 pass
         else:
@@ -248,10 +288,43 @@ def m3uToFileEmby():
             else:
                 print(track.title)
 
+        if len(nfo_info) > 0:
+            # Узнаем качество видео с помощью утилиты ffprobe
+            quality = GetQuality(track.path,timeout_value)
+            if quality != None:
+                if ('RU' in count.code):
+                    if int(year) < 1991:
+                        category_path = 'Советские фильмы'
+                    else: category_path = 'Российские фильмы'
+                else: 
+                    if ('SU' in count.code):
+                        category_path = 'Советские фильмы'
+                    else: category_path = 'Зарубежные фильмы'
+                genre = ''
+                if len(nfo_info) >= 11:
+                    genre = nfo_info[10].split('=')[1]
+                    if genre == 'мультфильм':
+                        category_path = 'Мультфильмы'
+                    if genre == 'документальный':
+                        category_path = 'Документальные фильмы'
+                        
 
-        #print(track.title, track.path, track.logo)
+                # Проверка на дорогах
 
-"""
+                # Создаем папку и сохраняем файл 
+                SaveStrm(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year + "/", title_year + '-' + quality + ' [' + provider_prifix + ']' + '.strm', track.path)
+                SaveNFO(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year + '/' + title_year + '-' + quality + ' [' + provider_prifix + ']' + '.nfo', nfo_info)
+                if len(nfo_info) >= 9:
+                    if len(nfo_info[8].split('=')[1]) > 0:
+                    # Сохраняем постер
+                        SavePoster(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year, 'poster', nfo_info[8].split('=')[1])
+                if len(nfo_info) >= 10:
+                    if len(nfo_info[9].split('=')[1]) > 0:
+                    # Сохраняем задник
+                        SavePoster(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year, 'fanart', nfo_info[9].split('=')[1])  
+
+                print(category_path + ', ' + title_year + ', ' + genre)
+"""             
                 print(res._request.full_url)
                 #engine = rutor()
                 #engine.search(rec_name)
@@ -280,13 +353,7 @@ def m3uToFileEmby():
                     save_file(directory + "/" + path_name + "/" + str(year) + "/" + rec['name'] + "/", rec['name'] + '-' + quality + ' [' + provider_prifix + ']' + '.strm', rec['url'])
                     # Сохраняем logo
                     if rec['logo'] != None:
-                        ext = os.path.splitext(rec['logo'])[1]
-                        try:
-                            response = requests.get(rec['logo'], verify=False)
-                            with open(directory + "/" + path_name + "/" + str(year) + "/" + rec['name'] + "/poster" + ext, "wb") as file:
-                                file.write(response.content)
-                        except:
-                            pass
+                        SavePoster(directory + "/" + path_name + "/" + str(year) + "/" + rec['name'])
             except:
                 pass
             print('rec: ' + str(i))
