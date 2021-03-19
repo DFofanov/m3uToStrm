@@ -35,11 +35,11 @@ PROBE_COMMAND = (
 )
 
 directory = '/Users/fofanov.dmitry/Projects/'
-m3u_file = 'ott.m3u8'
-#m3u_file = '195_Kinokolekcia.m3u'
+#m3u_file = 'ott.m3u8'
+m3u_file = '195_Kinokolekcia.m3u'
 
 provider_prifix = 'hdru'
-path_name = 'StrmEmby'
+path_name = 'Strm'
 
 tmdb_key = '1e5af542a2069e37d4ce990ad61946e0'
 kinopoisk_key = '6858ec1f-37af-4774-aafd-51775f042087'
@@ -224,13 +224,15 @@ def SaveNFO(filename,nfo_info):
         f = open(filename,"w+")
         f.write('<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n')
         f.write('<movie>\n')
-        f.write('  <plot><![CDATA[' + nfo_info.get('plot') + ']]></plot>\n')
+        if nfo_info.get('plot') != None:
+            f.write('  <plot><![CDATA[' + nfo_info.get('plot') + ']]></plot>\n')
         f.write('  <outline />\n')
         f.write('  <lockdata>false</lockdata>\n')
         f.write('  <dateadded>' + datetime.datetime.now().strftime('%Y-%m-%d %H:%M') + '</dateadded>\n')
         f.write('  <title>' + nfo_info.get('title') + '</title>\n')
         f.write('  <originaltitle>' + nfo_info.get('originaltitle') + '</originaltitle>\n')
-        f.write('  <rating>' + nfo_info.get('rating') + '</rating>\n')
+        if nfo_info.get('rating') != None:
+            f.write('  <rating>' + str(nfo_info.get('rating')) + '</rating>\n')
         f.write('  <year>' + nfo_info.get('year') + '</year>\n')
         f.write('  <imdbid>' + nfo_info.get('imdbid') + '</imdbid>\n')
         f.write('  <tmdbid>' + nfo_info.get('tmdbid') + '</tmdbid>\n')
@@ -260,7 +262,7 @@ def m3uToFileEmby():
                 nfo_info['plot'] = res[0].overview
                 nfo_info['title'] = res[0].title
                 nfo_info['originaltitle'] = res[0].originaltitle
-                nfo_info['rating'] = str(res[0].popularity)
+                nfo_info['rating'] = ''
                 nfo_info['year'] = year
                 nfo_info['imdbid'] = res[0].imdb
                 nfo_info['tmdbid'] = str(res[0].id)
@@ -283,13 +285,35 @@ def m3uToFileEmby():
             kinopoisk = KP(token=kinopoisk_key)
             res = kinopoisk.search(track.title)
             if len(res) > 0:
-                print( res[0].ru_name )
-                print( res[0].year )
-                print( res[0].genres )
-                print( res[0].countries )
-                print( res[0].poster )
+                kp_id = res[0].kp_id
+
+                nfo_info['title'] = res[0].ru_name
+                nfo_info['originaltitle'] = res[0].name
+                nfo_info['year'] =  str(res[0].year)
+                nfo_info['imdbid'] = ''
+                nfo_info['tmdbid'] = ''
+                if len(res[0].genres) > 0:
+                    nfo_info['genre'] = res[0].genres[0]
+
+                Countries = ''
+                for count in res[0].countries:
+                    if len(Countries) == 0:
+                        Countries = count
+                    else: Countries = Countries + ',' + count
+                nfo_info['countries'] = Countries
+                
+                res = kinopoisk.get_film(kp_id)
+                if res != None:
+                    nfo_info['plot'] = res.description
+                    nfo_info['rating'] = res.imdb_rate
+                    nfo_info['releasedate'] = str(res.premiere)
+                    nfo_info['poster'] = res.poster
             else:
-                print(track.title)
+                # Узнаем качество видео с помощью утилиты ffprobe
+                quality = GetQuality(track.path,timeout_value)
+                if quality != None:
+                    SaveStrm(directory + path_name + "/NoName/" + str(year) + "/" + title_year + "/", title_year + '-' + quality + ' [' + provider_prifix + ']' + '.strm', track.path)
+                print('NoName - ' + track.title)
 
         if len(nfo_info) > 0:
             # Узнаем качество видео с помощью утилиты ffprobe
@@ -313,16 +337,16 @@ def m3uToFileEmby():
                 # Проверка на дорогах
 
                 # Создаем папку и сохраняем файл 
-                SaveStrm(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year + "/", title_year + '-' + quality + ' [' + provider_prifix + ']' + '.strm', track.path)
-                SaveNFO(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year + '/' + title_year + '-' + quality + ' [' + provider_prifix + ']' + '.nfo', nfo_info)
+                SaveStrm(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year.replace('/','') + "/", title_year.replace('/','') + '-' + quality + ' [' + provider_prifix + ']' + '.strm', track.path)
+                SaveNFO(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year.replace('/','') + '/' + title_year.replace('/','') + '-' + quality + ' [' + provider_prifix + ']' + '.nfo', nfo_info)
                 if nfo_info.get('poster') != None:
                     # Сохраняем постер
-                    SavePoster(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year, 'poster', nfo_info.get('poster'))
+                    SavePoster(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year.replace('/',''), 'poster', nfo_info.get('poster'))
                 if nfo_info.get('fanart') != None:
                     # Сохраняем задник
-                    SavePoster(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year, 'fanart', nfo_info.get('fanart'))  
+                    SavePoster(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year.replace('/',''), 'fanart', nfo_info.get('fanart'))  
 
-                print(category_path + ', ' + title_year + ', ' + genre)
+                print(category_path + ', ' + title_year)
 """             
                 print(res._request.full_url)
                 #engine = rutor()
