@@ -35,10 +35,11 @@ PROBE_COMMAND = (
 )
 
 directory = '/Users/fofanov.dmitry/Projects/'
-#m3u_file = 'ott.m3u8'
-m3u_file = '195_Kinokolekcia.m3u'
+m3u_file = 'ott.m3u8'
+#m3u_file = 'megogo.m3u'
+#m3u_file = '195_Kinokolekcia.m3u'
 
-provider_prifix = 'hdru'
+provider_prifix = 'ott'
 path_name = 'Strm'
 
 tmdb_key = '1e5af542a2069e37d4ce990ad61946e0'
@@ -245,18 +246,23 @@ def m3uToFileEmby():
     #m3ufile = sys.argv[1]
     m3ufile = directory + m3u_file
     playlist = ParseM3U(m3ufile)
+    i = 0
+    count = len(playlist)
     for track in playlist:
+        i = i + 1
+  
         title_array = track.title.split(' (')
         title = title_array[0]
         year = title_array[len(title_array)-1][0:-1]
-
-        nfo_info = {}
 
         # Подключаем API ключ для tmdb3
         tmdb.set_key(tmdb_key)
         tmdb.set_locale('ru', 'RU')
         title_year = title + ' (' + year + ')'
         res = tmdb.searchMovieWithYear(title_year)
+
+
+        nfo_info = {}        
         if len(res) > 0:
             try:
                 nfo_info['plot'] = res[0].overview
@@ -274,57 +280,60 @@ def m3uToFileEmby():
                 if len(res[0].genres) > 0:
                     nfo_info['genre'] = res[0].genres[0].name
                 Countries = ''
-                for count in res[0].countries:
+                for countrie in res[0].countries:
                     if len(Countries) == 0:
-                        Countries = count.code
-                    else: Countries = Countries + ',' + count.code
+                        Countries = countrie.code
+                    else: Countries = Countries + ',' + countrie.code
                 nfo_info['countries'] = Countries
             except:
                 pass
         else:
-            kinopoisk = KP(token=kinopoisk_key)
-            res = kinopoisk.search(track.title)
-            if len(res) > 0:
-                kp_id = res[0].kp_id
+            try:
+                kinopoisk = KP(token=kinopoisk_key)
+                res = kinopoisk.search(track.title)
+                if len(res) > 0:
+                    kp_id = res[0].kp_id
 
-                nfo_info['title'] = res[0].ru_name
-                nfo_info['originaltitle'] = res[0].name
-                nfo_info['year'] =  str(res[0].year)
-                nfo_info['imdbid'] = ''
-                nfo_info['tmdbid'] = ''
-                if len(res[0].genres) > 0:
-                    nfo_info['genre'] = res[0].genres[0]
+                    nfo_info['title'] = res[0].ru_name
+                    nfo_info['originaltitle'] = res[0].name
+                    nfo_info['year'] =  str(res[0].year)
+                    nfo_info['imdbid'] = ''
+                    nfo_info['tmdbid'] = ''
+                    if len(res[0].genres) > 0:
+                        nfo_info['genre'] = res[0].genres[0]
 
-                Countries = ''
-                for count in res[0].countries:
-                    if len(Countries) == 0:
-                        Countries = count
-                    else: Countries = Countries + ',' + count
-                nfo_info['countries'] = Countries
-                
-                res = kinopoisk.get_film(kp_id)
-                if res != None:
-                    nfo_info['plot'] = res.description
-                    nfo_info['rating'] = res.imdb_rate
-                    nfo_info['releasedate'] = str(res.premiere)
-                    nfo_info['poster'] = res.poster
-            else:
-                # Узнаем качество видео с помощью утилиты ffprobe
-                quality = GetQuality(track.path,timeout_value)
-                if quality != None:
-                    SaveStrm(directory + path_name + "/NoName/" + str(year) + "/" + title_year + "/", title_year + '-' + quality + ' [' + provider_prifix + ']' + '.strm', track.path)
-                print('NoName - ' + track.title)
+                    Countries = ''
+                    for countrie in res[0].countries:
+                        if len(Countries) == 0:
+                            Countries = countrie
+                        else: Countries = Countries + ',' + countrie
+                    nfo_info['countries'] = Countries
+                    
+                    res = kinopoisk.get_film(kp_id)
+                    if res != None:
+                        nfo_info['plot'] = res.description
+                        nfo_info['rating'] = res.imdb_rate
+                        nfo_info['releasedate'] = str(res.premiere)
+                        nfo_info['poster'] = res.poster
+                else:
+                    # Узнаем качество видео с помощью утилиты ffprobe
+                    quality = GetQuality(track.path,timeout_value)
+                    if quality != None:
+                        SaveStrm(directory + path_name + "/NoName/" + str(year) + "/" + title_year + "/", title_year + '-' + quality + ' [' + provider_prifix + ']' + '.strm', track.path)
+                    print('NoName - ' + track.title)
+            except:
+                pass
 
         if len(nfo_info) > 0:
             # Узнаем качество видео с помощью утилиты ffprobe
             quality = GetQuality(track.path,timeout_value)
             if quality != None:
-                if ('RU' in nfo_info.get('countries')):
+                if ('RU' in nfo_info.get('countries')) or ('Россия' in nfo_info.get('countries')):
                     if int(year) < 1991:
                         category_path = 'Советские фильмы'
                     else: category_path = 'Российские фильмы'
                 else: 
-                    if ('SU' in nfo_info.get('countries')):
+                    if ('SU' in nfo_info.get('countries')) or ('СССР' in nfo_info.get('countries')):
                         category_path = 'Советские фильмы'
                     else: category_path = 'Зарубежные фильмы'
                 genre = nfo_info.get('genre')
@@ -333,9 +342,6 @@ def m3uToFileEmby():
                 if genre == 'документальный':
                     category_path = 'Документальные фильмы'
                         
-
-                # Проверка на дорогах
-
                 # Создаем папку и сохраняем файл 
                 SaveStrm(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year.replace('/','') + "/", title_year.replace('/','') + '-' + quality + ' [' + provider_prifix + ']' + '.strm', track.path)
                 SaveNFO(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year.replace('/','') + '/' + title_year.replace('/','') + '-' + quality + ' [' + provider_prifix + ']' + '.nfo', nfo_info)
@@ -346,41 +352,8 @@ def m3uToFileEmby():
                     # Сохраняем задник
                     SavePoster(directory + path_name + "/" + category_path + "/" + str(year) + "/" + title_year.replace('/',''), 'fanart', nfo_info.get('fanart'))  
 
-                print(category_path + ', ' + title_year)
-"""             
-                print(res._request.full_url)
-                #engine = rutor()
-                #engine.search(rec_name)
-                # http://rutor.info/search/0/0/100/0/%D0%92%D0%B5%D0%BD%D0%BE%D0%BC%20(2018)
-                movies = Movie.objects.search(rec_name)
-                if len(movies) > 0:
-                    m = movies[0]
-                    movie_name = m.title
-                    movie_id = m.id
-                    movie_year = m.year
-                    movie_votes = m.votes
-                    movie_imdb_votes = m.imdb_votes
-                    m.get_content('posters')
-                    if (len(m.posters) >0 ):
-                        p = m.posters[0]
-                year = rec['name'].split('(')[1][:4]
-                quality = None
-                # Узнаем качество видео с помощью утилиты ffprobe
-                obj_probe = probe(rec['url'],timeout_value)
-                if obj_probe != None and len(obj_probe) > 0:
-                    if len(obj_probe["streams"]) > 0:
-                        width = obj_probe["streams"][0]["width"]
-                        quality = get_category(width)
-                if quality != None:
-                    # Создаем папку и сохраняем файл 
-                    save_file(directory + "/" + path_name + "/" + str(year) + "/" + rec['name'] + "/", rec['name'] + '-' + quality + ' [' + provider_prifix + ']' + '.strm', rec['url'])
-                    # Сохраняем logo
-                    if rec['logo'] != None:
-                        SavePoster(directory + "/" + path_name + "/" + str(year) + "/" + rec['name'])
-            except:
-                pass
-            print('rec: ' + str(i))
- """
+                print(str(i) + ' in ' + str(count) + ', ' + category_path + ': ' + title_year)
+
 def main():
     m3uToFileEmby()
 
