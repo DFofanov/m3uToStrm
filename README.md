@@ -1,10 +1,10 @@
 # m3uToStrm
 
-## Скрипт импорта медиаконтента из файла m3u для медиакомбайна Emby (https://emby.media/)
+## Скрипт преобразования медиаконтента из файла m3u в медиаконтент для просмотра в Emby (https://emby.media/)
 
 [<img alt="Python" src="https://img.shields.io/badge/Python-3776AB?style=float&logo=python&logoColor=white" />](https://www.python.org/)
 
-Подробно формат файлов описан в WIKI Emby (https://support.emby.media/support/solutions/articles/44001159179-theme-songs-videos)
+Подробно формат файлов и структура папок описан в WIKI Emby (https://support.emby.media/support/solutions/articles/44001159179-theme-songs-videos)
 
 <img src="https://emby.media/resources/msg-3-0-39164600-1443639466.png">
 
